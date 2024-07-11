@@ -21,7 +21,7 @@
     <div id="container">
         <div id="videoContainer">
             <video id="input_video"></video>
-            <canvas id="output_canvas"></canvas>
+            <canvas id="output_canvas" width="640" height="480"></canvas>
         </div>
         <div id="stats">
             <h2>統計資料</h2>
@@ -101,8 +101,8 @@
             onFrame: async () => {
                 await pose.send({ image: videoElement });
             },
-            width: 300,
-            height: 150
+            width: 640,
+            height: 480
         });
 
         camera.start();
