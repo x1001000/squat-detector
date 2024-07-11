@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深蹲達成率檢測器</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #container { display: flex; }
+        #videoContainer { position: relative; }
+        #output_canvas { position: absolute; left: 0; top: 0; }
+        #stats { margin-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>深蹲達成率檢測器</h1>
+    <div id="container">
+        <div id="videoContainer">
+            <video id="input_video"></video>
+            <canvas id="output_canvas"></canvas>
+        </div>
+        <div id="stats">
+            <h2>統計資料</h2>
+            <p>深蹲次數: <span id="squatCount">0</span></p>
+            <p>深蹲達成率: <span id="squatCompletion">0</span>%</p>
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const squatCountElement = document.getElementById('squatCount');
+        const squatCompletionElement = document.getElementById('squatCompletion');
+
+        let squatCount = 0;
+        let isSquatting = false;
+        let squatCompletion = 0;
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                // 繪製姿勢標記
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+                drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2 });
+
+                // 計算深蹲
+                const leftHip = results.poseLandmarks[23];
+                const leftKnee = results.poseLandmarks[25];
+                const leftAnkle = results.poseLandmarks[27];
+
+                const kneeAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
+
+                if (kneeAngle < 100 && !isSquatting) {
+                    isSquatting = true;
+                    squatCompletion = 100 - kneeAngle;
+                } else if (kneeAngle > 160 && isSquatting) {
+                    isSquatting = false;
+                    squatCount++;
+                    squatCountElement.textContent = squatCount;
+                }
+
+                squatCompletionElement.textContent = Math.round(squatCompletion);
+            }
+
+            canvasCtx.restore();
+        }
+
+        function calculateAngle(a, b, c) {
+            let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) {
+                angle = 360 - angle;
+            }
+            return angle;
+        }
+
+        const pose = new Pose({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({ image: videoElement });
+            },
+            width: 300,
+            height: 150
+        });
+
+        camera.start();
+    </script>
+</body>
+</html>
